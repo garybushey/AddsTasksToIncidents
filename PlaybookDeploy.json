@@ -154,7 +154,7 @@
     },
     "type": "ApiConnection",
     "inputs": {
-        "body": "SecurityIncident\n| where IncidentName == \"@{triggerBody()?['object']?['name']}\"\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| mv-expand todynamic(RelatedAnalyticRuleIds)\n| extend singleRelatedAnalyticRuleId = tostring(RelatedAnalyticRuleIds)\n| join (_GetWatchlist('RuleTasks')\n    | mv-expand todynamic(TaskTemplates)\n    | extend singleTaskTemplate = tostring(TaskTemplates)\n    | extend RuleID = tostring(RuleID))\n    on $left.singleRelatedAnalyticRuleId == $right.RuleID\n| project singleTaskTemplate\n| join (_GetWatchlist('TaskTemplates')\n    | project Title, Description, ID)\n    on $left.singleTaskTemplate == $right.ID\n| order by Title asc\n| project Title, Description",
+        "body": "SecurityIncident\n| where IncidentName == \"@{triggerBody()?['object']?['name']}\"\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| mv-expand todynamic(RelatedAnalyticRuleIds)\n| extend singleRelatedAnalyticRuleId = tostring(RelatedAnalyticRuleIds)\n| join (_GetWatchlist('RuleTasks')\n    | mv-expand todynamic(TaskTemplates)\n    | extend singleTaskTemplate = tostring(TaskTemplates)\n    | extend RuleID = tostring(RuleID))\n    on $left.singleRelatedAnalyticRuleId == $right.RuleID\n| project singleTaskTemplate\n| join (_GetWatchlist('TaskTemplates')\n    | project Title, Description, ID)\n    on $left.singleTaskTemplate == $right.ID\n| order by toint(ID) asc\n| project Title, Description",
         "host": {
             "connection": {
                 "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
