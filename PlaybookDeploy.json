@@ -1,0 +1,245 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "",
+        "description": "",
+        "prerequisites": "",
+    "postDeployment": [],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "",
+"entities": [],
+"tags": [],
+"support": {
+"tier": "community",
+"armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+},
+"author": {
+"name": ""
+}
+},
+"parameters": {
+"PlaybookName": {
+"defaultValue": "CreateTasksFromWatchlist",
+"type": "string"
+}
+},
+"variables": {
+"AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+"MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+},
+"resources": [
+{
+"properties": {
+    "provisioningState": "Succeeded",
+    "state": "Enabled",
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+            "defaultValue": {},
+            "type": "Object"
+        }
+    },
+    "triggers": {
+        "Microsoft_Sentinel_incident": {
+            "type": "ApiConnectionWebhook",
+            "inputs": {
+                "body": {
+                    "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                },
+                "path": "/incident-creation"
+            }
+        }
+    },
+    "actions": {
+        "Delay": {
+        "runAfter": {},
+        "type": "Wait",
+        "inputs": {
+            "interval": {
+                "count": 3,
+                "unit": "Minute"
+            }
+        }
+    },
+    "For_each": {
+        "foreach": "@body('Parse_JSON')",
+        "actions": {
+            "Add_task_to_incident": {
+            "runAfter": {},
+            "type": "ApiConnection",
+            "inputs": {
+                "body": {
+                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                    "taskDescription": "<p>@{items('For_each')['Description']}</p>",
+                    "taskTitle": "@items('For_each')['Title']"
+                },
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                },
+                "method": "post",
+                "path": "/Incidents/CreateTask"
+            }
+        },
+        "Delay_2": {
+            "runAfter": {
+                "Add_task_to_incident": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Wait",
+            "inputs": {
+                "interval": {
+                    "count": 10,
+                    "unit": "Second"
+                }
+            }
+        }
+    },
+    "runAfter": {
+        "Parse_JSON": [
+            "Succeeded"
+        ]
+    },
+    "type": "Foreach",
+    "runtimeConfiguration": {
+        "concurrency": {
+            "repetitions": 1
+        }
+    }
+},
+"Parse_JSON": {
+    "runAfter": {
+        "Run_query_and_list_results": [
+            "Succeeded"
+        ]
+    },
+    "type": "ParseJson",
+    "inputs": {
+        "content": "@body('Run_query_and_list_results')?['value']",
+        "schema": {
+            "items": {
+                "properties": {
+                    "Description": {
+                        "type": "string"
+                    },
+                    "Title": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "Title",
+                    "Description"
+                ],
+                "type": "object"
+            },
+            "type": "array"
+        }
+    }
+},
+"Run_query_and_list_results": {
+    "runAfter": {
+        "Delay": [
+            "Succeeded"
+        ]
+    },
+    "type": "ApiConnection",
+    "inputs": {
+        "body": "SecurityIncident\n| where IncidentName == \"@{triggerBody()?['object']?['name']}\"\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| mv-expand todynamic(RelatedAnalyticRuleIds)\n| extend singleRelatedAnalyticRuleId = tostring(RelatedAnalyticRuleIds)\n| join (_GetWatchlist('RuleTasks')\n    | mv-expand todynamic(TaskTemplates)\n    | extend singleTaskTemplate = tostring(TaskTemplates)\n    | extend RuleID = tostring(RuleID))\n    on $left.singleRelatedAnalyticRuleId == $right.RuleID\n| project singleTaskTemplate\n| join (_GetWatchlist('TaskTemplates')\n    | project Title, Description, ID)\n    on $left.singleTaskTemplate == $right.ID\n| order by Title asc\n| project Title, Description",
+        "host": {
+            "connection": {
+                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+            }
+        },
+        "method": "post",
+        "path": "/queryData",
+        "queries": {
+            "resourcegroups": "",
+            "resourcename": "",
+            "resourcetype": "Log Analytics Workspace",
+            "subscriptions": "",
+            "timerange": "Last 48 hours"
+        }
+    }
+}
+},
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+"value": {
+"azuremonitorlogs": {
+    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+    "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+},
+"azuresentinel": {
+    "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+    "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+    "connectionProperties": {
+        "authentication": {
+            "type": "ManagedServiceIdentity"
+        }
+    }
+}
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"tags": {
+"hidden-SentinelTemplateName": "CreateTasksFromWatchlist",
+"hidden-SentinelTemplateVersion": "1.0"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('AzuremonitorlogsConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('AzuremonitorlogsConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+}
+]
+}

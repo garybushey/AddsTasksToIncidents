@@ -1,0 +1,6 @@
+﻿RuleID,RuleName,TaskTemplates
+cfb75437-7e99-432e-ba68-4efab0e6c9a0,User Assigned Privileged Role,"[1,2,3]"
+5ab77bf6-fb0e-4677-a4a0-9f438229af53,GABTEST 2nd IP,"[1,2,5,7,9,10]"
+fb46c6e2-fb77-4373-bbf0-192a0cbf4f00,GitHub Activies from a new country,[1]
+9667d45d-ce01-4f4a-8535-5622b442d832,Heartbeat NRT,"[1,2]"
+af2fca60-996b-4809-adf7-dec98f0cd4d5,Heartbeat Test,"[1,2]"
